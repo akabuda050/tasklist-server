@@ -1,5 +1,11 @@
 import { WebSocketServer } from "ws";
 import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+
+const __dirname = path.dirname(__filename);
 
 const wss = new WebSocketServer({ port: 8080 });
 
@@ -11,8 +17,8 @@ class Clients {
 
   saveClient(username, client) {
     if (!this.clientsList[username]) {
-      if (!fs.existsSync(`database/${username}`)) {
-        fs.mkdirSync(`database/${username}`);
+      if (!fs.existsSync(path.resolve(__dirname, `./database/${username}`))) {
+        fs.mkdirSync(path.resolve(__dirname, `./database/${username}`));
       }
 
       this.clientsList[username] = {
@@ -24,12 +30,17 @@ class Clients {
       this.clientsList[username].ws.push(client);
     }
 
-    const files = fs.readdirSync(`database/${username}`);
+    const files = fs.readdirSync(
+      path.resolve(__dirname, `./database/${username}`)
+    );
 
     const tasks = [];
     files.forEach((f) => {
       const task = JSON.parse(
-        fs.readFileSync(`database/${username}/${f}`, "utf-8")
+        fs.readFileSync(
+          path.resolve(__dirname, `./database/${username}/${f}`),
+          "utf-8"
+        )
       );
 
       if (task?.id) {
@@ -47,7 +58,9 @@ class Clients {
 
   add(username, targetTask, autostart) {
     const task = {
-      id: fs.readdirSync(`database/${username}`).length + 1,
+      id:
+        fs.readdirSync(path.resolve(__dirname, `./database/${username}`))
+          .length + 1,
       name: targetTask.name,
       project: targetTask?.project,
       created_at: new Date().getTime(),
@@ -57,7 +70,7 @@ class Clients {
     };
 
     fs.writeFileSync(
-      `database/${username}/task_${task.id}.json`,
+      path.resolve(__dirname, `./database/${username}/task_${task.id}.json`),
       JSON.stringify(task)
     );
 
@@ -76,7 +89,12 @@ class Clients {
   }
 
   delete(username, targetTask) {
-    fs.unlinkSync(`database/${username}/task_${targetTask.id}.json`);
+    fs.unlinkSync(
+      path.resolve(
+        __dirname,
+        `./database/${username}/task_${targetTask.id}.json`
+      )
+    );
 
     this.clientsList[username].ws.forEach((c) => {
       c.send(
@@ -97,7 +115,10 @@ class Clients {
 
     const task = JSON.parse(
       fs.readFileSync(
-        `database/${username}/task_${targetTask.id}.json`,
+        path.resolve(
+          __dirname,
+          `./database/${username}/task_${targetTask.id}.json`
+        ),
         "utf-8"
       )
     );
@@ -109,7 +130,10 @@ class Clients {
     task.started_at = new Date().getTime();
 
     fs.writeFileSync(
-      `database/${username}/task_${targetTask.id}.json`,
+      path.resolve(
+        __dirname,
+        `./database/${username}/task_${targetTask.id}.json`
+      ),
       JSON.stringify(task)
     );
 
@@ -126,7 +150,10 @@ class Clients {
   complete(username, targetTask) {
     const task = JSON.parse(
       fs.readFileSync(
-        `database/${username}/task_${targetTask.id}.json`,
+        path.resolve(
+          __dirname,
+          `./database/${username}/task_${targetTask.id}.json`
+        ),
         "utf-8"
       )
     );
@@ -138,7 +165,10 @@ class Clients {
     task.completed_at = new Date().getTime();
 
     fs.writeFileSync(
-      `database/${username}/task_${targetTask.id}.json`,
+      path.resolve(
+        __dirname,
+        `./database/${username}/task_${targetTask.id}.json`
+      ),
       JSON.stringify(task)
     );
 
@@ -155,7 +185,10 @@ class Clients {
   updateTaskTimer(username, targetTask) {
     const task = JSON.parse(
       fs.readFileSync(
-        `database/${username}/task_${targetTask.id}.json`,
+        path.resolve(
+          __dirname,
+          `./database/${username}/task_${targetTask.id}.json`
+        ),
         "utf-8"
       )
     );
@@ -167,7 +200,10 @@ class Clients {
     task.current_at = new Date().getTime();
 
     fs.writeFileSync(
-      `database/${username}/task_${targetTask.id}.json`,
+      path.resolve(
+        __dirname,
+        `./database/${username}/task_${targetTask.id}.json`
+      ),
       JSON.stringify(task)
     );
 
@@ -199,11 +235,16 @@ class Clients {
     // Init new timers.
     this.clientsList[username].timers = [];
 
-    const files = fs.readdirSync(`database/${username}`);
+    const files = fs.readdirSync(
+      path.resolve(__dirname, `./database/${username}`)
+    );
     const tasks = [];
     files.forEach((f) => {
       const task = JSON.parse(
-        fs.readFileSync(`database/${username}/${f}`, "utf-8")
+        fs.readFileSync(
+          path.resolve(__dirname, `./database/${username}/${f}`),
+          "utf-8"
+        )
       );
 
       if (task?.id) {
@@ -226,12 +267,12 @@ class Clients {
 
 const clients = new Clients();
 let clientId = JSON.parse(
-  fs.readFileSync("database/clients.json", "utf-8")
+  fs.readFileSync(path.resolve(__dirname, "./database/clients.json"), "utf-8")
 ).count;
 const genereateClientId = () => {
   ++clientId;
   fs.writeFileSync(
-    "database/clients.json",
+    path.resolve(__dirname, "./database/clients.json"),
     JSON.stringify({ count: clientId })
   );
 
@@ -281,7 +322,8 @@ wss.on("connection", function connection(ws) {
       Object.keys(clients.clientsList).map((c) => ({
         name: c,
         clients: clients.clientsList[c].ws.length,
-        tasks: fs.readdirSync(`database/${c}`).length,
+        tasks: fs.readdirSync(path.resolve(__dirname, `./database/${c}`))
+          .length,
         timers: clients.clientsList[c].timers.length,
       }))
     );
