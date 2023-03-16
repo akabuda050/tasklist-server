@@ -1,11 +1,11 @@
-### Simple WebSocket server for task list.
+# Simple WebSocket server for task list.
 
-# Init freash project
+## Init freash project
 ```bash
 node init.js
 ```
 
-# Run server
+## Run server
 ```bash
 node server.js
 ```
