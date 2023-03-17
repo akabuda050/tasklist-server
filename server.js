@@ -2,12 +2,11 @@ import { WebSocketServer } from "ws";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { v4 as uuid } from "uuid";
+import crypto from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
-
 const __dirname = path.dirname(__filename);
-
-const wss = new WebSocketServer({ port: 8080 });
 
 class Clients {
   constructor() {
@@ -15,30 +14,118 @@ class Clients {
     this.saveClient = this.saveClient.bind(this);
   }
 
+  resolveDatabaseUsersPath() {
+    return path.resolve(__dirname, `./database/users`);
+  }
+
+  resolveDatabaseUserPath(username) {
+    return path.resolve(`${this.resolveDatabaseUsersPath()}/${username}`);
+  }
+
+  resolveDatabaseTaskPath(username, taskId) {
+    return path.resolve(
+      `${path.resolve(
+        this.resolveDatabaseUserPath(username)
+      )}/task_${taskId}.json`
+    );
+  }
+
   saveClient(username, client) {
+    if (client.id && client.username) return;
+
+    client.id = uuid();
+    client.username = username;
+
     if (!this.clientsList[username]) {
-      if (!fs.existsSync(path.resolve(__dirname, `./database/${username}`))) {
-        fs.mkdirSync(path.resolve(__dirname, `./database/${username}`));
+      if (!fs.existsSync(this.resolveDatabaseUserPath(username))) {
+        fs.mkdirSync(this.resolveDatabaseUserPath(username));
       }
 
       this.clientsList[username] = {
         ws: [client],
-        tasks: [],
-        timers: [],
       };
     } else {
       this.clientsList[username].ws.push(client);
     }
+  }
 
-    const files = fs.readdirSync(
-      path.resolve(__dirname, `./database/${username}`)
-    );
+  generateHash(username, password) {
+    // create a hash object with the SHA256 algorithm
+    const hash = crypto.createHash("sha256");
+
+    // update the hash object with the username and password pair
+    hash.update(username + password);
+
+    // generate the hashed value as a hexadecimal string
+    const hashedValue = hash.digest("hex");
+
+    return hashedValue;
+  }
+
+  registerUser(username, password, secret, client) {
+    console.log(secret);
+    if (secret === "my very secret string") {
+      const hash = this.generateHash(username, password);
+      this.saveClient(hash, client);
+
+      client.send(
+        JSON.stringify({
+          type: "registered",
+          data: {
+            token: hash,
+          },
+        })
+      );
+    } else {
+      client.send(
+        JSON.stringify({
+          type: "error",
+          data: {
+            message: "Wrong secret provided!",
+          },
+        })
+      );
+
+      client.close();
+    }
+  }
+
+  loginUser(username, password, client) {
+    const hash = this.generateHash(username, password);
+
+    if (fs.existsSync(this.resolveDatabaseUserPath(hash))) {
+      this.saveClient(hash, client);
+
+      client.send(
+        JSON.stringify({
+          type: "loggedin",
+          data: {
+            token: hash,
+          },
+        })
+      );
+    } else {
+      client.send(
+        JSON.stringify({
+          type: "error",
+          data: {
+            message: "Wrong credentials!",
+          },
+        })
+      );
+
+      client.close();
+    }
+  }
+
+  sendTaskList(username, client) {
+    const files = fs.readdirSync(this.resolveDatabaseUserPath(username));
 
     const tasks = [];
     files.forEach((f) => {
       const task = JSON.parse(
         fs.readFileSync(
-          path.resolve(__dirname, `./database/${username}/${f}`),
+          `${this.resolveDatabaseUserPath(username)}/${f}`,
           "utf-8"
         )
       );
@@ -51,56 +138,67 @@ class Clients {
     client.send(
       JSON.stringify({
         type: "list",
-        tasks,
+        data: { tasks },
       })
     );
   }
 
   add(username, targetTask, autostart) {
     const task = {
-      id:
-        fs.readdirSync(path.resolve(__dirname, `./database/${username}`))
-          .length + 1,
+      id: uuid(),
       name: targetTask.name,
       project: targetTask?.project,
       created_at: new Date().getTime(),
-      started_at: 0,
+      started_at: autostart ? new Date().getTime() : 0,
       current_at: 0,
       completed_at: 0,
     };
 
     fs.writeFileSync(
-      path.resolve(__dirname, `./database/${username}/task_${task.id}.json`),
+      this.resolveDatabaseTaskPath(username, task.id),
       JSON.stringify(task)
     );
-
-    if (autostart) {
-      this.start(username, task);
-    }
 
     this.clientsList[username].ws.forEach((c) => {
       c.send(
         JSON.stringify({
           type: "created",
-          task: task,
+          data: {
+            task,
+          },
+        })
+      );
+    });
+  }
+
+  update(username, targetTask) {
+    fs.writeFileSync(
+      this.resolveDatabaseTaskPath(username, targetTask.id),
+      JSON.stringify(targetTask)
+    );
+
+    this.clientsList[username].ws.forEach((c) => {
+      c.send(
+        JSON.stringify({
+          type: "updated",
+          data: {
+            task: targetTask,
+          },
         })
       );
     });
   }
 
   delete(username, targetTask) {
-    fs.unlinkSync(
-      path.resolve(
-        __dirname,
-        `./database/${username}/task_${targetTask.id}.json`
-      )
-    );
+    fs.unlinkSync(this.resolveDatabaseTaskPath(username, targetTask.id));
 
     this.clientsList[username].ws.forEach((c) => {
       c.send(
         JSON.stringify({
           type: "deleted",
-          task: targetTask,
+          data: {
+            task: targetTask,
+          },
         })
       );
     });
@@ -115,10 +213,7 @@ class Clients {
 
     const task = JSON.parse(
       fs.readFileSync(
-        path.resolve(
-          __dirname,
-          `./database/${username}/task_${targetTask.id}.json`
-        ),
+        this.resolveDatabaseTaskPath(username, targetTask.id),
         "utf-8"
       )
     );
@@ -130,10 +225,7 @@ class Clients {
     task.started_at = new Date().getTime();
 
     fs.writeFileSync(
-      path.resolve(
-        __dirname,
-        `./database/${username}/task_${targetTask.id}.json`
-      ),
+      this.resolveDatabaseTaskPath(username, targetTask.id),
       JSON.stringify(task)
     );
 
@@ -141,7 +233,9 @@ class Clients {
       c.send(
         JSON.stringify({
           type: "updated",
-          task: task,
+          data: {
+            task,
+          },
         })
       );
     });
@@ -150,10 +244,7 @@ class Clients {
   complete(username, targetTask) {
     const task = JSON.parse(
       fs.readFileSync(
-        path.resolve(
-          __dirname,
-          `./database/${username}/task_${targetTask.id}.json`
-        ),
+        this.resolveDatabaseTaskPath(username, targetTask.id),
         "utf-8"
       )
     );
@@ -163,12 +254,10 @@ class Clients {
     }
 
     task.completed_at = new Date().getTime();
+    task.current_at = task.completed_at;
 
     fs.writeFileSync(
-      path.resolve(
-        __dirname,
-        `./database/${username}/task_${targetTask.id}.json`
-      ),
+      this.resolveDatabaseTaskPath(username, targetTask.id),
       JSON.stringify(task)
     );
 
@@ -176,156 +265,82 @@ class Clients {
       c.send(
         JSON.stringify({
           type: "updated",
-          task: task,
+          data: {
+            task,
+          },
         })
       );
     });
   }
 
-  updateTaskTimer(username, targetTask) {
-    const task = JSON.parse(
-      fs.readFileSync(
-        path.resolve(
-          __dirname,
-          `./database/${username}/task_${targetTask.id}.json`
-        ),
-        "utf-8"
-      )
+  consoleLogStats() {
+    console.log(
+      Object.keys(this.clientsList).map((c) => ({
+        name: c,
+        clients: this.clientsList[c].ws.length,
+        tasks: fs.readdirSync(path.resolve(__dirname, `./database/users/${c}`))
+          .length,
+      }))
     );
-
-    if (!task?.id || task.id !== targetTask.id) {
-      return targetTask;
-    }
-
-    task.current_at = new Date().getTime();
-
-    fs.writeFileSync(
-      path.resolve(
-        __dirname,
-        `./database/${username}/task_${targetTask.id}.json`
-      ),
-      JSON.stringify(task)
-    );
-
-    return task;
-  }
-
-  createTimer(username, task) {
-    return setInterval(() => {
-      const updatedTask = this.updateTaskTimer(username, task);
-      this.clientsList[username].ws.forEach((c) => {
-        c.send(
-          JSON.stringify({
-            type: "updated",
-            task: updatedTask,
-          })
-        );
-      });
-    }, 1000);
-  }
-
-  freshTimers(username) {
-    // Clear all current timers.
-    this.clientsList[username].timers.forEach((ti) => {
-      if (ti.interval) {
-        clearInterval(ti.interval);
-      }
-    });
-
-    // Init new timers.
-    this.clientsList[username].timers = [];
-
-    const files = fs.readdirSync(
-      path.resolve(__dirname, `./database/${username}`)
-    );
-    const tasks = [];
-    files.forEach((f) => {
-      const task = JSON.parse(
-        fs.readFileSync(
-          path.resolve(__dirname, `./database/${username}/${f}`),
-          "utf-8"
-        )
-      );
-
-      if (task?.id) {
-        tasks.push(task);
-      }
-    });
-
-    tasks.forEach((task) => {
-      if (!task.completed_at && task.started_at) {
-        const ti = {
-          taskId: task.id,
-          interval: this.createTimer(username, task),
-        };
-
-        this.clientsList[username].timers.push(ti);
-      }
-    });
   }
 }
 
 const clients = new Clients();
-let clientId = JSON.parse(
-  fs.readFileSync(path.resolve(__dirname, "./database/clients.json"), "utf-8")
-).count;
-const genereateClientId = () => {
-  ++clientId;
-  fs.writeFileSync(
-    path.resolve(__dirname, "./database/clients.json"),
-    JSON.stringify({ count: clientId })
-  );
-
-  return clientId;
-};
-
+const wss = new WebSocketServer({ port: 8080 });
 wss.on("connection", function connection(ws) {
-  ws.id = genereateClientId();
-
   ws.on("close", () => {
     if (ws.username) {
       clients.clientsList[ws.username].ws = clients.clientsList[
         ws.username
       ].ws.filter((_) => _.id !== ws.id);
     }
+
+    clients.consoleLogStats();
   });
 
   ws.on("message", function message(data) {
     const event = JSON.parse(data);
-    if (!event.username) {
-      ws.send(
-        JSON.stringify({
-          type: "error",
-          message: "Please login!",
-        })
+
+    if (event.type === "register") {
+      clients.registerUser(
+        event.data.username,
+        event.data.password,
+        event.data.secret,
+        ws
       );
+    } else if (event.type === "login") {
+      clients.loginUser(event.data.username, event.data.password, ws);
+    } else {
+      if (!event.data.token) {
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            data: {
+              message: "Please login!",
+            },
+          })
+        );
 
-      return;
+        return;
+      } else {
+        clients.saveClient(event.data.token, ws);
+      }
+
+      if (event.type === "create") {
+        clients.add(event.data.token, event.data.task);
+      } else if (event.type === "update") {
+        clients.update(event.data.token, event.data.task);
+      } else if (event.type === "delete") {
+        clients.delete(event.data.token, event.data.task);
+      } else if (event.type === "start") {
+        clients.start(event.data.token, event.data.task);
+      } else if (event.type === "complete") {
+        clients.complete(event.data.token, event.data.task);
+      } else if (event.type === "list") {
+        clients.sendTaskList(event.data.token, ws);
+      }
     }
 
-    if (event.type === "login") {
-      ws.username = event.username;
-      clients.saveClient(event.username, ws);
-    } else if (event.type === "create") {
-      clients.add(event.username, event.task);
-    } else if (event.type === "delete") {
-      clients.delete(event.username, event.task);
-    } else if (event.type === "start") {
-      clients.start(event.username, event.task);
-    } else if (event.type === "complete") {
-      clients.complete(event.username, event.task);
-    }
-
-    clients.freshTimers(event.username);
-
-    console.log(
-      Object.keys(clients.clientsList).map((c) => ({
-        name: c,
-        clients: clients.clientsList[c].ws.length,
-        tasks: fs.readdirSync(path.resolve(__dirname, `./database/${c}`))
-          .length,
-        timers: clients.clientsList[c].timers.length,
-      }))
-    );
+    clients.consoleLogStats();
   });
 });

@@ -2,10 +2,7 @@
 
 ## Init freash project
 ```bash
+npm install
 node init.js
-```
-
-## Run server
-```bash
 node server.js
 ```
