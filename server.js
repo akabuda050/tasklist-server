@@ -154,7 +154,7 @@ class Clients {
       project: targetTask?.project,
       created_at: new Date().getTime(),
       started_at: autostart ? new Date().getTime() : 0,
-      current_at: 0,
+      current_at: autostart ? new Date().getTime() : 0,
       completed_at: 0,
     };
 
@@ -227,6 +227,7 @@ class Clients {
     }
 
     task.started_at = new Date().getTime();
+    task.current_at = new Date().getTime();
 
     fs.writeFileSync(
       this.resolveDatabaseTaskPath(username, targetTask.id),
