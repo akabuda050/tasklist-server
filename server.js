@@ -38,6 +38,12 @@ wss.on("connection", function connection(ws) {
       );
     } else if (event.type === "login") {
       clients.loginUser(event.data.username, event.data.password, ws);
+    } else if (event.type === "logout") {
+      if (ws.username) {
+        clients.clientsList[ws.username].ws = clients.clientsList[
+          ws.username
+        ].ws.filter((_) => _.id !== ws.id);
+      }
     } else {
       if (!event.data.token) {
         ws.send(
