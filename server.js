@@ -44,6 +44,13 @@ wss.on("connection", function connection(ws) {
           ws.username
         ].ws.filter((_) => _.id !== ws.id);
       }
+
+      ws.send(
+        JSON.stringify({
+          type: "loggedout",
+          data: {},
+        })
+      );
     } else {
       if (!event.data.token) {
         ws.send(
