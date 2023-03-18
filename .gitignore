@@ -1,5 +1,6 @@
 # Project needs
 database/
+certs/
 
 # Logs
 logs
