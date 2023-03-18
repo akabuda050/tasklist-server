@@ -26,6 +26,8 @@ export class Clients {
   }
 
   saveClient(username, client) {
+    if (client.id && client.username) return;
+
     client.id = uuid();
     client.username = username;
 
