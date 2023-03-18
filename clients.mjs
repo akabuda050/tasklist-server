@@ -26,8 +26,6 @@ export class Clients {
   }
 
   saveClient(username, client) {
-    if (client.id && client.username) return;
-
     client.id = uuid();
     client.username = username;
 
@@ -62,7 +60,7 @@ export class Clients {
           JSON.stringify({
             type: "error",
             data: {
-              error: 'registration',
+              error: "registration",
               message: "User already exists!",
             },
           })
@@ -87,7 +85,7 @@ export class Clients {
         JSON.stringify({
           type: "error",
           data: {
-            error: 'registration',
+            error: "registration",
             message: "Wrong secret provided!",
           },
         })
