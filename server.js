@@ -44,6 +44,7 @@ wss.on("connection", function connection(ws) {
           JSON.stringify({
             type: "error",
             data: {
+              error: "no-token",
               message: "Please login!",
             },
           })

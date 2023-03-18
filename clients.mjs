@@ -62,6 +62,7 @@ export class Clients {
           JSON.stringify({
             type: "error",
             data: {
+              error: 'registration',
               message: "User already exists!",
             },
           })
@@ -86,12 +87,11 @@ export class Clients {
         JSON.stringify({
           type: "error",
           data: {
+            error: 'registration',
             message: "Wrong secret provided!",
           },
         })
       );
-
-      client.close();
     }
   }
 
@@ -114,12 +114,11 @@ export class Clients {
         JSON.stringify({
           type: "error",
           data: {
+            error: "login",
             message: "Wrong credentials!",
           },
         })
       );
-
-      client.close();
     }
   }
 
