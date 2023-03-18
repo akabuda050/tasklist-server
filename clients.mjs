@@ -32,10 +32,6 @@ export class Clients {
     client.username = username;
 
     if (!this.clientsList[username]) {
-      if (!fs.existsSync(this.resolveDatabaseUserPath(username))) {
-        fs.mkdirSync(this.resolveDatabaseUserPath(username));
-      }
-
       this.clientsList[username] = {
         ws: [client],
       };
@@ -60,6 +56,21 @@ export class Clients {
   registerUser(username, password, secret, client) {
     if (this.registrationSecrets.includes(secret)) {
       const hash = this.generateHash(username, password);
+
+      if (fs.existsSync(this.resolveDatabaseUserPath(hash))) {
+        client.send(
+          JSON.stringify({
+            type: "error",
+            data: {
+              message: "User already exists!",
+            },
+          })
+        );
+
+        return;
+      }
+
+      fs.mkdirSync(this.resolveDatabaseUserPath(hash));
       this.saveClient(hash, client);
 
       client.send(
