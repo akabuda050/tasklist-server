@@ -27,6 +27,14 @@ wss.on("connection", function connection(ws) {
   });
 
   ws.on("message", function message(data) {
+    const message = data.toString();
+
+    if (message === "ping") {
+      console.log("ping");
+      ws.send("pong");
+      return;
+    }
+
     const event = JSON.parse(data);
 
     if (event.type === "register") {
