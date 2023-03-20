@@ -4,9 +4,7 @@ import * as dotenv from "dotenv"; // see https://github.com/motdotla/dotenv#how-
 // Config dotenv in order to read .env file.
 dotenv.config();
 
-export const registrationSecrets = {
-  registrationSecrets: process.env.registration_secrets.split("|"),
-};
+export const registrationSecrets = process.env.registration_secrets.split("|");
 export const environment = process.env.environment || "dev";
 export const serverPort = process.env.server_port || 8080;
 export const privateKey = process.env.private_key
