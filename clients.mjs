@@ -1,12 +1,19 @@
 import { v4 as uuid } from "uuid";
 import crypto from "crypto";
 import { __filename, __dirname, fs, path } from "./fsUtils.mjs";
+import { registrationSecrets } from "./config.mjs";
 
 export class Clients {
   constructor() {
-    this.clientsList = {};
+    this.clientsList = [];
     this.saveClient = this.saveClient.bind(this);
-    this.registrationSecrets = process.env.registration_secrets.split("|");
+    this.registrationSecrets = registrationSecrets;
+  }
+
+  prepareClient(ws) {
+    ws.id = uuid();
+
+    return ws;
   }
 
   resolveDatabaseUsersPath() {
@@ -19,25 +26,26 @@ export class Clients {
 
   resolveDatabaseTaskPath(username, taskId) {
     return path.resolve(
-      `${path.resolve(
-        this.resolveDatabaseUserPath(username)
-      )}/task_${taskId}.json`
+      `${this.resolveDatabaseUserPath(username)}/task_${taskId}.json`
     );
   }
 
   saveClient(username, client) {
-    if (client.id && client.username) return;
+    if (this.clientsList.find((c) => c.id === client.id)) return;
 
-    client.id = uuid();
-    client.username = username;
+    this.clientsList.push({
+      id: client.id,
+      username: username,
+      client,
+    });
+  }
 
-    if (!this.clientsList[username]) {
-      this.clientsList[username] = {
-        ws: [client],
-      };
-    } else {
-      this.clientsList[username].ws.push(client);
-    }
+  broadcatsUserClients(username, payload) {
+    this.clientsList
+      .filter((c) => c.username === username)
+      .forEach(({ client }) => {
+        client.send(payload);
+      });
   }
 
   generateHash(username, password) {
@@ -154,7 +162,6 @@ export class Clients {
       project: targetTask?.project,
       created_at: new Date().getTime(),
       started_at: autostart ? new Date().getTime() : 0,
-      current_at: autostart ? new Date().getTime() : 0,
       completed_at: 0,
     };
 
@@ -163,49 +170,32 @@ export class Clients {
       JSON.stringify(task)
     );
 
-    this.clientsList[username].ws.forEach((c) => {
-      c.send(
-        JSON.stringify({
-          type: "created",
-          data: {
-            task,
-          },
-        })
-      );
-    });
-  }
-
-  update(username, targetTask) {
-    fs.writeFileSync(
-      this.resolveDatabaseTaskPath(username, targetTask.id),
-      JSON.stringify(targetTask)
+    this.broadcatsUserClients(
+      username,
+      JSON.stringify({
+        type: "created",
+        data: {
+          task,
+        },
+      })
     );
-
-    this.clientsList[username].ws.forEach((c) => {
-      c.send(
-        JSON.stringify({
-          type: "updated",
-          data: {
-            task: targetTask,
-          },
-        })
-      );
-    });
   }
 
   delete(username, targetTask) {
-    fs.unlinkSync(this.resolveDatabaseTaskPath(username, targetTask.id));
+    const taskPath = this.resolveDatabaseTaskPath(username, targetTask.id);
+    if (fs.existsSync(taskPath)) {
+      fs.unlinkSync(taskPath);
+    }
 
-    this.clientsList[username].ws.forEach((c) => {
-      c.send(
-        JSON.stringify({
-          type: "deleted",
-          data: {
-            task: targetTask,
-          },
-        })
-      );
-    });
+    this.broadcatsUserClients(
+      username,
+      JSON.stringify({
+        type: "deleted",
+        data: {
+          task: targetTask,
+        },
+      })
+    );
   }
 
   start(username, targetTask) {
@@ -227,23 +217,21 @@ export class Clients {
     }
 
     task.started_at = new Date().getTime();
-    task.current_at = new Date().getTime();
 
     fs.writeFileSync(
       this.resolveDatabaseTaskPath(username, targetTask.id),
       JSON.stringify(task)
     );
 
-    this.clientsList[username].ws.forEach((c) => {
-      c.send(
-        JSON.stringify({
-          type: "updated",
-          data: {
-            task,
-          },
-        })
-      );
-    });
+    this.broadcatsUserClients(
+      username,
+      JSON.stringify({
+        type: "updated",
+        data: {
+          task,
+        },
+      })
+    );
   }
 
   complete(username, targetTask) {
@@ -259,32 +247,36 @@ export class Clients {
     }
 
     task.completed_at = new Date().getTime();
-    task.current_at = task.completed_at;
 
     fs.writeFileSync(
       this.resolveDatabaseTaskPath(username, targetTask.id),
       JSON.stringify(task)
     );
 
-    this.clientsList[username].ws.forEach((c) => {
-      c.send(
-        JSON.stringify({
-          type: "updated",
-          data: {
-            task,
-          },
-        })
-      );
-    });
+    this.broadcatsUserClients(
+      username,
+      JSON.stringify({
+        type: "updated",
+        data: {
+          task,
+        },
+      })
+    );
+  }
+
+  removeClient(client) {
+    this.clientsList = this.clientsList.filter((c) => c.id === client);
   }
 
   consoleLogStats() {
     console.log(
-      Object.keys(this.clientsList).map((c) => ({
-        name: c,
-        clients: this.clientsList[c].ws.length,
-        tasks: fs.readdirSync(path.resolve(__dirname, `./database/users/${c}`))
+      this.clientsList.map((c) => ({
+        name: c.username,
+        clients: this.clientsList.filter((_) => _.username === c.username)
           .length,
+        tasks: fs.readdirSync(
+          path.resolve(__dirname, `./database/users/${c.username}`)
+        ).length,
       }))
     );
   }
