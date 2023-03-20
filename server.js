@@ -118,7 +118,7 @@ const checkAuth = (ws, event) => {
 
 const eventsMap = {
   ping: handlePing,
-  registration: handleRegistration,
+  register: handleRegistration,
   login: handleLogin,
   logout: handleLogout,
   list: (ws, event) => {
