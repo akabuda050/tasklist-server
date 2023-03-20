@@ -87,6 +87,7 @@ export class Clients {
           type: "registered",
           data: {
             token: hash,
+            username,
           },
         })
       );
@@ -114,6 +115,7 @@ export class Clients {
           type: "loggedin",
           data: {
             token: hash,
+            username,
           },
         })
       );
