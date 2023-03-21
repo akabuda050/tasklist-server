@@ -163,8 +163,9 @@ export class Clients {
       name: targetTask.name,
       project: targetTask?.project,
       created_at: new Date().getTime(),
-      started_at: autostart ? new Date().getTime() : 0,
-      completed_at: 0,
+      started_at: autostart ? new Date().getTime() : null,
+      completed_at: null,
+      elapsed: 0,
     };
 
     fs.writeFileSync(
@@ -214,11 +215,109 @@ export class Clients {
       )
     );
 
-    if (task.started_at) {
+    // Can't start already started or completed task.
+    if (task.started_at || this.completed_at) {
       return;
     }
 
     task.started_at = new Date().getTime();
+
+    fs.writeFileSync(
+      this.resolveDatabaseTaskPath(username, targetTask.id),
+      JSON.stringify(task)
+    );
+
+    this.broadcatsUserClients(
+      username,
+      JSON.stringify({
+        type: "updated",
+        data: {
+          task,
+        },
+      })
+    );
+  }
+
+  pause(username, targetTask) {
+    const task = JSON.parse(
+      fs.readFileSync(
+        this.resolveDatabaseTaskPath(username, targetTask.id),
+        "utf-8"
+      )
+    );
+
+    // Can't pause un-started or paused or completed task.
+    if (!task.started_at || task.paused_at || task.completed_at) {
+      return;
+    }
+
+    task.paused_at = new Date().getTime();
+
+    fs.writeFileSync(
+      this.resolveDatabaseTaskPath(username, targetTask.id),
+      JSON.stringify(task)
+    );
+
+    this.broadcatsUserClients(
+      username,
+      JSON.stringify({
+        type: "updated",
+        data: {
+          task,
+        },
+      })
+    );
+  }
+
+  resume(username, targetTask) {
+    const task = JSON.parse(
+      fs.readFileSync(
+        this.resolveDatabaseTaskPath(username, targetTask.id),
+        "utf-8"
+      )
+    );
+
+    // Can't resume un-started or completed task.
+    if (!task.started_at || task.completed_at) {
+      return;
+    }
+
+    task.elapsed += new Date().getTime() - task.paused_at;
+    task.paused_at = null;
+
+    fs.writeFileSync(
+      this.resolveDatabaseTaskPath(username, targetTask.id),
+      JSON.stringify(task)
+    );
+
+    this.broadcatsUserClients(
+      username,
+      JSON.stringify({
+        type: "updated",
+        data: {
+          task,
+        },
+      })
+    );
+  }
+
+  restart(username, targetTask) {
+    const task = JSON.parse(
+      fs.readFileSync(
+        this.resolveDatabaseTaskPath(username, targetTask.id),
+        "utf-8"
+      )
+    );
+
+    // Can't restart un-started or non-completed task.
+    if (!task.started_at || !task.completed_at) {
+      return;
+    }
+
+    task.started_at = new Date().getTime();
+    task.completed_at = null;
+    task.paused_at = null;
+    task.elapsed = 0;
 
     fs.writeFileSync(
       this.resolveDatabaseTaskPath(username, targetTask.id),
@@ -244,11 +343,17 @@ export class Clients {
       )
     );
 
+    // Can't complete already completed task.
     if (task.completed_at) {
       return;
     }
 
-    task.completed_at = new Date().getTime();
+    const timestamp = new Date().getTime();
+    task.started_at = task.started_at || timestamp;
+    task.completed_at = timestamp;
+    task.elapsed =
+      (task.paused_at || task.completed_at) - task.started_at - task.elapsed;
+    task.paused_at = null;
 
     fs.writeFileSync(
       this.resolveDatabaseTaskPath(username, targetTask.id),

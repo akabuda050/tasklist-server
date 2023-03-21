@@ -21,7 +21,6 @@ const handleClose = (ws, code, reason) => {
   console.log({
     status: "closed",
     id: ws.id,
-    username: ws.username,
     code,
     reason,
   });
@@ -34,7 +33,6 @@ const handleError = (ws, error) => {
   console.log({
     status: "error",
     id: ws.id,
-    username: ws.username,
     error,
   });
 
@@ -145,10 +143,30 @@ const eventsMap = {
 
     clients.start(event.data.token, event.data.task);
   },
+  pause: (ws, event) => {
+    if (!checkAuth(ws, event)) return;
+
+    clients.pause(event.data.token, event.data.task);
+  },
+  resume: (ws, event) => {
+    if (!checkAuth(ws, event)) return;
+
+    clients.resume(event.data.token, event.data.task);
+  },
+  restart: (ws, event) => {
+    if (!checkAuth(ws, event)) return;
+
+    clients.restart(event.data.token, event.data.task);
+  },
   complete: (ws, event) => {
     if (!checkAuth(ws, event)) return;
 
     clients.complete(event.data.token, event.data.task);
+  },
+  copy: (ws, event) => {
+    if (!checkAuth(ws, event)) return;
+
+    clients.copy(event.data.token, event.data.task);
   },
 };
 
@@ -158,7 +176,6 @@ const handleMessage = (ws, data) => {
   console.log({
     status: "message",
     id: ws.id,
-    username: ws.username,
     event,
   });
 
@@ -184,7 +201,6 @@ wss.on("connection", function connection(ws) {
   console.log({
     status: `connected`,
     id: ws.id,
-    username: ws.username,
   });
 
   ws.on("error", (error) => {
