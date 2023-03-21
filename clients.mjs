@@ -7,6 +7,8 @@ export class Clients {
   constructor() {
     this.clientsList = [];
     this.saveClient = this.saveClient.bind(this);
+    this.removeClient = this.removeClient.bind(this);
+
     this.registrationSecrets = registrationSecrets;
   }
 
@@ -372,7 +374,7 @@ export class Clients {
   }
 
   removeClient(client) {
-    this.clientsList = this.clientsList.filter((c) => c.id === client);
+    this.clientsList = this.clientsList.filter((c) => c.id !== client.id);
   }
 
   consoleLogStats() {
