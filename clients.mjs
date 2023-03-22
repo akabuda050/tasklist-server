@@ -342,30 +342,7 @@ export class Clients {
       )
     );
 
-    // Can't restart un-started or non-completed task.
-    if (!task.started_at || !task.completed_at) {
-      return;
-    }
-
-    task.started_at = new Date().getTime();
-    task.completed_at = null;
-    task.paused_at = null;
-    task.elapsed = 0;
-
-    fs.writeFileSync(
-      this.resolveDatabaseTaskPath(username, targetTask.id),
-      JSON.stringify(task)
-    );
-
-    this.broadcatsUserClients(
-      username,
-      JSON.stringify({
-        type: "updated",
-        data: {
-          task,
-        },
-      })
-    );
+    this.add(username, task, true);
   }
 
   complete(username, targetTask) {
