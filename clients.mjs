@@ -164,6 +164,7 @@ export class Clients {
       id: uuid(),
       name: targetTask.name,
       project: targetTask?.project,
+      priority: targetTask.priority,
       created_at: new Date().getTime(),
       started_at: autostart ? new Date().getTime() : null,
       completed_at: null,
