@@ -187,6 +187,36 @@ export class Clients {
     );
   }
 
+  updatePriority(username, targetTask) {
+    const task = JSON.parse(
+      fs.readFileSync(
+        this.resolveDatabaseTaskPath(username, targetTask.id),
+        "utf-8"
+      )
+    );
+
+    if (!task?.id) {
+      return;
+    }
+
+    task.priority = targetTask.priority;
+
+    fs.writeFileSync(
+      this.resolveDatabaseTaskPath(username, task.id),
+      JSON.stringify(task)
+    );
+
+    this.broadcatsUserClients(
+      username,
+      JSON.stringify({
+        type: "updated",
+        data: {
+          task: task,
+        },
+      })
+    );
+  }
+
   delete(username, targetTask) {
     const taskPath = this.resolveDatabaseTaskPath(username, targetTask.id);
     if (fs.existsSync(taskPath)) {

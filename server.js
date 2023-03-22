@@ -131,6 +131,13 @@ const eventsMap = {
 
     clients.consoleLogStats();
   },
+  updatePriority: (ws, event) => {
+    if (!checkAuth(ws, event)) return;
+
+    clients.updatePriority(event.data.token, event.data.task);
+
+    clients.consoleLogStats();
+  },
   delete: (ws, event) => {
     if (!checkAuth(ws, event)) return;
 
