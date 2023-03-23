@@ -138,6 +138,13 @@ const eventsMap = {
 
     clients.consoleLogStats();
   },
+  updateName: (ws, event) => {
+    if (!checkAuth(ws, event)) return;
+
+    clients.updateName(event.data.token, event.data.task);
+
+    clients.consoleLogStats();
+  },
   delete: (ws, event) => {
     if (!checkAuth(ws, event)) return;
 
